@@ -10,6 +10,8 @@ pub enum Error {
     ReqwestError(#[from] reqwest::Error),
     #[error("{0}")]
     AppError(String),
+    #[error("{0}")]
+    Html2TextError(#[from] html2text::Error)
 }
 
 pub type AppResult<T> = Result<T, Error>;

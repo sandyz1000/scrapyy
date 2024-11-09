@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::error::{AppResult, Error};
+
 fn are_args_valid(main_string: &str, target_strings: &[String]) -> bool {
     !main_string.is_empty()
         && !target_strings.is_empty()
@@ -49,18 +51,16 @@ pub struct BestMatch {
     pub best_match_index: usize,
 }
 
-pub fn find_best_match(
-    main_string: &str,
-    target_strings: &Vec<String>,
-) -> Result<BestMatch, &'static str> {
-    if !are_args_valid(main_string, target_strings) {
-        return Err("Bad arguments: First argument should be a string, second should be an array of strings");
+pub fn find_best_match(main_string: &str, targets: &Vec<String>) -> AppResult<BestMatch> {
+    if !are_args_valid(main_string, targets) {
+        let msg = "Bad arguments: First argument should be a string, second should be an array of strings".to_string();
+        return Err(Error::AppError(msg));
     }
 
     let mut ratings = Vec::new();
     let mut best_match_index = 0;
 
-    for (i, target) in target_strings.iter().enumerate() {
+    for (i, target) in targets.iter().enumerate() {
         let current_rating = compare_two_strings(main_string, target);
         ratings.push(MatchResult {
             target: target.clone(),

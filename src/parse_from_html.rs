@@ -1,12 +1,14 @@
 #![allow(unused)]
 
 use crate::error::{AppResult as Result, Error};
+use crate::similarity::find_best_match;
 use crate::{
     extract::*,
     html::{cleanify, purify},
-    linker::{absolutify, is_valid_url, normalize, purify as purify_url},
+    linker::{absolutify, is_valid_url, purify as purify_url},
     transformation::{exec_post_parser, exec_pre_parser},
     utils::get_time_to_read,
+    // normalize::normalize
 };
 use reqwest::Client;
 
@@ -17,8 +19,8 @@ async fn fetch_html(url: &str) -> Result<String> {
     Ok(body)
 }
 
-fn strip_tags(html: &str) -> String {
-    html2text::from_read(html.as_bytes(), 80)
+fn strip_tags(html: &str) -> Result<String> {
+    html2text::from_read(html.as_bytes(), 80).map_err(|e| Error::Html2TextError(e))
 }
 
 fn summarize(description: &str, text: &str, threshold: usize, maxlen: usize) -> String {
@@ -93,10 +95,6 @@ pub async fn parse_from_html(
     let pure_html = purify(input_html);
     let meta = extract_metadata(&pure_html);
 
-    let Some(title) = extract_title_with_readability(&meta.title, "") else {
-        return Err(Error::NullError(format!("Title")));
-    };
-
     let MetaEntry {
         url,
         shortlink,
@@ -117,32 +115,39 @@ pub async fn parse_from_html(
         desc_len_threshold,
         content_len_threshold,
     } = parsed_options;
-    let Some(title) = extract_title_with_readability(&pure_html, input_url) else {
-        return Err(Error::AppError(format!(
-            "Unable to extract title with readability!"
-        )));
-    };
+    let mut title = title;
+    if title.is_empty() {
+        let err_msg = format!("Unable to extract title with readability!");
+        match extract_title_with_readability(&pure_html, input_url) {
+            Some(t) => title = t,
+            _ => return Err(Error::AppError(err_msg)),
+        };
+    }
 
+    // TODO: FixME: Look for unique
     let links: Vec<String> = vec![url, shortlink, amphtml, canonical, input_url.to_string()]
-        .iter()
+        .into_iter()
         .filter(|u| is_valid_url(&u))
-        .map(|url| purify_url(url).unwrap_or("".to_string()))
+        .map(|url| purify_url(&url).unwrap_or(url))
         .collect();
 
     if links.is_empty() {
         return Err(Error::NullError(format!("Links")));
     }
 
-    let best_url = choose_best_url(&links, &title);
-    let content = normalize(input_html, &best_url);
-    let content = exec_pre_parser(&content, &links);
-    let Some(content) = extract_with_readability(&content, &best_url) else {
-        return Err(Error::NullError(format!("Content")));
-    };
-    let content = exec_post_parser(&content, &links);
-    let content = cleanify(&content);
+    let best_url = choose_best_url(&links, &title)?;
 
-    let text_content = strip_tags(&content);
+    // Start the sequence of operation to extract the content
+    // let input_html = normalize(input_html, &best_url);
+    
+    let content = exec_pre_parser(&input_html, &links);
+    let content = extract_with_readability(&content, &best_url)
+        .ok_or(Error::NullError(format!("Content")))?;
+    let content = exec_post_parser(&content, &links)
+        .and_then(|c| Some(cleanify(&c)))
+        .unwrap();
+
+    let text_content = strip_tags(&content)?;
 
     if text_content.len() < content_len_threshold {
         return Err(Error::NullError(format!("Text content")));
@@ -169,9 +174,9 @@ pub async fn parse_from_html(
     Ok(parsed_content)
 }
 
-fn choose_best_url(links: &[String], _title: &str) -> String {
-    // Implement your best URL choosing logic here
-    links.first().cloned().unwrap_or_default()
+fn choose_best_url(candidates: &Vec<String>, title: &str) -> Result<String> {
+    let ranking = find_best_match(title, candidates)?;
+    Ok(ranking.best_match.target)
 }
 
 #[cfg(test)]

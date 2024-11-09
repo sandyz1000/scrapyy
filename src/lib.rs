@@ -3,6 +3,8 @@ mod html;
 mod linker;
 mod parse_from_html;
 mod retrieve;
+// mod normalize;
+
 pub mod similarity;
 pub mod transformation;
 mod utils;

@@ -61,6 +61,7 @@ pub fn get_charset(html: &str) -> String {
 }
 
 /// Function to cleanify HTML
+/// TODO: Verify and fix
 pub fn cleanify(input_html: &str) -> String {
     let document = Html::parse_document(input_html);
     let html_selector = Selector::parse("html").unwrap();

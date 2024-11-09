@@ -17,8 +17,7 @@ macro_rules! create_setter {
 }
 
 fn get_meta_content(
-    node: &ElementRef,
-    attribute_lists: &HashMap<&str, Vec<&str>>,
+    node: &ElementRef, attributes: &HashMap<&str, Vec<&str>>
 ) -> Option<(String, String)> {
     let content = node.value().attr("content")?;
     let property = node
@@ -28,7 +27,7 @@ fn get_meta_content(
         .map(|s| s.to_lowercase());
     let name = node.value().attr("name").map(|s| s.to_lowercase());
 
-    for (key, attrs) in attribute_lists {
+    for (key, attrs) in attributes {
         if property
             .as_ref()
             .map_or(false, |p| attrs.contains(&p.as_str()))
@@ -89,7 +88,7 @@ lazy_static! {
         m.insert("source", MetaEntry::set_source as FieldSetter);
         m.insert("published", MetaEntry::set_published as FieldSetter);
         m.insert("favicon", MetaEntry::set_favicon as FieldSetter);
-        m.insert("meta_type", MetaEntry::set_meta_type as FieldSetter);
+        m.insert("type", MetaEntry::set_meta_type as FieldSetter);
         m
     };
     
@@ -134,30 +133,24 @@ const ATTRIBUTE_LISTS: &[(&str, &str)] = &[
     ("type", "@type"),
 ];
 
-fn parse_json(text: &str) -> Option<Value> {
-    serde_json::from_str(text).ok()
-}
-
 /// Parses JSON-LD data from a document and populates an entry object.
 /// Only populates if the original entry object is empty or undefined.
-
-fn extract_ld_schema(document: &Html, entry: MetaEntry) -> MetaEntry {
+fn extract_ld_schema(document: &Html, entry: &mut MetaEntry) {
+    // TODO: FIX ME
     // let mut entry = entry;
     if let Ok(selector) = Selector::parse(r#"script[type="application/ld+json"]"#) {
-        if let Some(element) = document.select(&selector).next() {
+        document.select(&selector).for_each(|element|{
             if let Some(ldschema) = element.text().next() {
                 let ld_json: Value = serde_json::from_str(ldschema).expect("Failed to parse JSON-LD");
-                let ld_map: HashMap<String, Value> = match ld_json {
-                    Value::Object(map) => HashMap::from_iter(map),
-                    _ => panic!("Expected a JSON object"),
-                };
-                // TODO: Add rest of the logic here
-                
+            
+            //     let ld_map: HashMap<String, Value> = match ld_json {
+            //         Value::Object(map) => HashMap::from_iter(map),
+            //         _ => panic!("Expected a JSON object"),
+            //     };
+            //  
             };
-        }
+        }); 
     }
-    
-    entry
 }
 
 fn set_property(entry: &mut MetaEntry, field: &str, value: String) {
@@ -166,10 +159,11 @@ fn set_property(entry: &mut MetaEntry, field: &str, value: String) {
     }
 }
 
+// TODO: Verify and fix
 pub fn extract_metadata(html: &str) -> MetaEntry {
     let mut entry = MetaEntry::default();
 
-    let attribute_lists = HashMap::from([
+    let attributes = HashMap::from([
         (
             "source",
             vec![
@@ -238,7 +232,7 @@ pub fn extract_metadata(html: &str) -> MetaEntry {
                 "parsely-pub-date",
             ],
         ),
-        ("meta_type", vec!["og:type"]),
+        ("type", vec!["og:type"]),
     ]);
 
     let document = Html::parse_document(html);
@@ -266,12 +260,12 @@ pub fn extract_metadata(html: &str) -> MetaEntry {
     }
 
     for node in document.select(&Selector::parse("meta").unwrap()) {
-        if let Some((key, content)) = get_meta_content(&node, &attribute_lists) {
+        if let Some((key, content)) = get_meta_content(&node, &attributes) {
             set_property(&mut entry, &key, content);
         }
     }
 
-    entry = extract_ld_schema(&document, entry);
+    extract_ld_schema(&document, &mut entry);
     entry
 }
 

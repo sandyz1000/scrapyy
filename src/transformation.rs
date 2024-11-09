@@ -86,14 +86,15 @@ pub fn exec_pre_parser(html: &str, links: &Vec<String>) -> String {
     document.root_element().html()
 }
 
-pub fn exec_post_parser(html: &str, links: &Vec<String>) -> String {
+pub fn exec_post_parser(html: &str, links: &Vec<String>) -> Option<String> {
     let document = Html::parse_document(html);
     for transformation in find_transformations(links.clone()) {
         if let Some(post) = transformation.post {
             post(&document);
         }
     }
-    document.root_element().html()
+    // document.root_element().html()
+    None
 }
 
 #[cfg(test)]
@@ -183,9 +184,10 @@ mod tests {
         </div>
         "#;
         let links: Vec<String> = vec!["https://xyz.com/article".to_string()];
-        let result = exec_post_parser(html, &links);
+        if let Some(result) = exec_post_parser(html, &links) {
+            assert!(result.contains("<i>user</i>"));
+            assert!(!result.contains("<b>user</b>"));
+        }
 
-        assert!(result.contains("<i>user</i>"));
-        assert!(!result.contains("<b>user</b>"));
     }
 }

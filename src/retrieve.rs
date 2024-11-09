@@ -1,10 +1,10 @@
 use crate::error::{AppResult as Result, Error};
-use reqwest::{Client, Proxy};
+use reqwest::{header::{HeaderMap, HeaderValue}, Client, Proxy};
 
 async fn profetch(
     url: &str,
     proxy_url: &str,
-    headers: Option<reqwest::header::HeaderMap>,
+    headers: Option<HeaderMap>,
 ) -> Result<reqwest::Response> {
     let client = Client::builder()
         .proxy(Proxy::all(proxy_url)?)
@@ -23,10 +23,10 @@ async fn profetch(
 
 pub async fn retrieve(url: &str, options: Option<RetrieveOptions>) -> Result<Vec<u8>> {
     let default_headers = {
-        let mut headers = reqwest::header::HeaderMap::new();
+        let mut headers = HeaderMap::new();
         headers.insert(
             "user-agent",
-            reqwest::header::HeaderValue::from_static(
+            HeaderValue::from_static(
                 "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0",
             ),
         );
@@ -59,7 +59,7 @@ pub async fn retrieve(url: &str, options: Option<RetrieveOptions>) -> Result<Vec
 
 #[derive(Default)]
 pub struct RetrieveOptions {
-    pub headers: Option<reqwest::header::HeaderMap>,
+    pub headers: Option<HeaderMap>,
     pub proxy: Option<ProxyOptions>,
     pub agent: Option<reqwest::Client>,
     pub signal: Option<reqwest::Request>,
@@ -68,7 +68,7 @@ pub struct RetrieveOptions {
 #[derive(Default)]
 pub struct ProxyOptions {
     target: String,
-    pub headers: Option<reqwest::header::HeaderMap>,
+    pub headers: Option<HeaderMap>,
 }
 
 #[cfg(test)]

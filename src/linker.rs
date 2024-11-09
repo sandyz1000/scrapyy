@@ -1,4 +1,6 @@
 #![allow(unused)]
+use std::borrow::BorrowMut;
+
 use crate::similarity::find_best_match;
 use scraper::{Html, Selector};
 
@@ -13,17 +15,6 @@ pub fn choose_best_url(candidates: Vec<String>, title: &str) -> Option<String> {
     match best_match {
         Ok(ranking) => Some(ranking.best_match.target),
         Err(_) => None,
-    }
-}
-
-/// Convert a relative URL to an absolute URL
-pub fn absolutify(base_url: &str, relative_url: &str) -> String {
-    match url::Url::parse(base_url) {
-        Ok(base) => match base.join(relative_url) {
-            Ok(url) => url.to_string(),
-            Err(_) => String::new(),
-        },
-        Err(_) => String::new(),
     }
 }
 
@@ -98,32 +89,15 @@ pub fn purify(url: &str) -> Option<String> {
     None
 }
 
-/// Normalize URLs in HTML
-pub fn normalize(html: &str, base_url: &str) -> String {
-    let document = Html::parse_document(html);
-    let a_selector = Selector::parse("a").unwrap();
-    let img_selector = Selector::parse("img").unwrap();
-
-    for element in document.select(&a_selector) {
-        if let Some(href) = element.value().attr("href") {
-            let href = absolutify(base_url, href);
-            // element.set_attr("href", &absolutify(base_url, href));
-            // element.set_attr("target", "_blank");
-        }
+// Convert a relative URL to an absolute URL
+pub fn absolutify(base_url: &str, relative_url: &str) -> String {
+    match url::Url::parse(base_url) {
+        Ok(base) => match base.join(relative_url) {
+            Ok(url) => url.to_string(),
+            Err(_) => String::new(),
+        },
+        Err(_) => String::new(),
     }
-
-    for element in document.select(&img_selector) {
-        if let Some(src) = element
-            .value()
-            .attr("data-src")
-            .or(element.value().attr("src"))
-        {
-            let src = absolutify(base_url, src);
-            // element.set_attr("src", &absolutify(base_url, src));
-        }
-    }
-
-    document.root_element().html()
 }
 
 // Get the domain from a URL
