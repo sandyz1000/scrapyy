@@ -11,7 +11,9 @@ pub enum Error {
     #[error("{0}")]
     AppError(String),
     #[error("{0}")]
-    Html2TextError(#[from] html2text::Error)
+    Html2TextError(#[from] html2text::Error),
+    #[error("Unsupported encoding {0}")]
+    UnsupportedEncoding(String)
 }
 
 pub type AppResult<T> = Result<T, Error>;
