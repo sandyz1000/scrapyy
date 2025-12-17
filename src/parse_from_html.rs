@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use crate::error::{AppResult as Result, Error};
+use crate::normalizer::normalize;
 use crate::similarity::find_best_match;
 use crate::{
     extract::*,
@@ -43,6 +44,7 @@ pub struct ParsedContent {
     pub description: String,
     pub links: Vec<String>,
     pub image: String,
+    // This is the parsed content from the html document 
     pub content: String,
     pub author: String,
     pub favicon: String,
@@ -93,6 +95,7 @@ pub async fn parse_from_html(
     parsed_options: &ParseOptions,
 ) -> Result<ParsedContent> {
     let pure_html = purify(input_html);
+    // TODO: Fix the extract_metadata completely
     let meta = extract_metadata(&pure_html);
 
     let MetaEntry {
@@ -117,14 +120,17 @@ pub async fn parse_from_html(
     } = parsed_options;
     let mut title = title;
     if title.is_empty() {
+        // Use original HTML instead of purified HTML for readability extraction
+        // because purify() strips too much content and breaks readability
         let err_msg = format!("Unable to extract title with readability!");
-        match extract_title_with_readability(&pure_html, input_url) {
+        match extract_title_with_readability(&input_html, input_url) {
             Some(t) => title = t,
             _ => return Err(Error::AppError(err_msg)),
         };
     }
 
     // TODO: FixME: Look for unique
+    // Use set to discard duplicates
     let links: Vec<String> = vec![url, shortlink, amphtml, canonical, input_url.to_string()]
         .into_iter()
         .filter(|u| is_valid_url(&u))
@@ -138,14 +144,14 @@ pub async fn parse_from_html(
     let best_url = choose_best_url(&links, &title)?;
 
     // Start the sequence of operation to extract the content
-    // let input_html = normalize(input_html, &best_url);
+    let input_html = normalize(&input_html, &best_url)?;
     
     let content = exec_pre_parser(&input_html, &links);
     let content = extract_with_readability(&content, &best_url)
         .ok_or(Error::NullError(format!("Content")))?;
     let content = exec_post_parser(&content, &links)
-        .and_then(|c| Some(cleanify(&c)))
-        .unwrap();
+        .map(|c| cleanify(&c))
+        .unwrap_or_else(|| cleanify(&content));
 
     let text_content = strip_tags(&content)?;
 

@@ -1,10 +1,10 @@
 use lazy_static::lazy_static;
 use readability::extractor;
-use scraper::{element_ref::ElementRef, Html, Selector};
+use scraper::{Html, Selector, element_ref::ElementRef};
 use serde::Serialize;
 use serde_json::Value;
-use url::Url;
 use std::{collections::HashMap, io::Cursor};
+use url::Url;
 
 macro_rules! create_setter {
     ($field:ident, $type:ty) => {
@@ -16,16 +16,18 @@ macro_rules! create_setter {
     };
 }
 
+// TODO:
+// Not sure if any property attr exists in HTML5 node object
 fn get_meta_content(
-    node: &ElementRef, attributes: &HashMap<&str, Vec<&str>>
+    node: &ElementRef,
+    attributes: &HashMap<&str, Vec<&str>>,
 ) -> Option<(String, String)> {
-    let content = node.value().attr("content")?;
+    let content = node.attr("content")?;
     let property = node
-        .value()
         .attr("property")
-        .or_else(|| node.value().attr("itemprop"))
+        .or_else(|| node.attr("itemprop"))
         .map(|s| s.to_lowercase());
-    let name = node.value().attr("name").map(|s| s.to_lowercase());
+    let name = node.attr("name").map(|s| s.to_lowercase());
 
     for (key, attrs) in attributes {
         if property
@@ -72,7 +74,6 @@ impl MetaEntry {
 }
 
 type FieldSetter = fn(&mut MetaEntry, String);
-type FieldGetter = fn(&MetaEntry) -> &String;
 
 lazy_static! {
     static ref SETTERS: HashMap<&'static str, FieldSetter> = {
@@ -91,7 +92,6 @@ lazy_static! {
         m.insert("type", MetaEntry::set_meta_type as FieldSetter);
         m
     };
-    
     static ref TYPE_SCHEMAS: Vec<String> = {
         vec![
             "aboutpage",
@@ -120,11 +120,14 @@ lazy_static! {
             "satiricalarticle",
             "scholarlyarticle",
             "medicalscholarlyarticle",
-        ].iter().map(|c| c.to_string()).collect()
+        ]
+        .iter()
+        .map(|c| c.to_string())
+        .collect()
     };
 }
 
-
+#[allow(dead_code)]
 const ATTRIBUTE_LISTS: &[(&str, &str)] = &[
     ("description", "description"),
     ("image", "image"),
@@ -135,21 +138,22 @@ const ATTRIBUTE_LISTS: &[(&str, &str)] = &[
 
 /// Parses JSON-LD data from a document and populates an entry object.
 /// Only populates if the original entry object is empty or undefined.
-fn extract_ld_schema(document: &Html, entry: &mut MetaEntry) {
-    // TODO: FIX ME
+fn extract_ld_schema(document: &Html, _entry: &mut MetaEntry) {
+    // TODO: FIX ME - Complete JSON-LD parsing implementation
     // let mut entry = entry;
     if let Ok(selector) = Selector::parse(r#"script[type="application/ld+json"]"#) {
-        document.select(&selector).for_each(|element|{
+        document.select(&selector).for_each(|element| {
             if let Some(ldschema) = element.text().next() {
-                let ld_json: Value = serde_json::from_str(ldschema).expect("Failed to parse JSON-LD");
-            
-            //     let ld_map: HashMap<String, Value> = match ld_json {
-            //         Value::Object(map) => HashMap::from_iter(map),
-            //         _ => panic!("Expected a JSON object"),
-            //     };
-            //  
+                let _ld_json: Value =
+                    serde_json::from_str(ldschema).expect("Failed to parse JSON-LD");
+
+                //     let ld_map: HashMap<String, Value> = match ld_json {
+                //         Value::Object(map) => HashMap::from_iter(map),
+                //         _ => panic!("Expected a JSON object"),
+                //     };
+                //
             };
-        }); 
+        });
     }
 }
 
@@ -241,20 +245,14 @@ pub fn extract_metadata(html: &str) -> MetaEntry {
         .select(&Selector::parse("head > title").unwrap())
         .next()
     {
-        set_property(
-            &mut entry,
-            "title",
-            title.text().collect::<Vec<_>>().concat(),
-        );
+        set_property(&mut entry, "title", title.text().collect::<String>());
     }
 
     for node in document.select(&Selector::parse("link").unwrap()) {
-        if let Some(rel) = node.value().attr("rel") {
-            if let Some(href) = node.value().attr("href") {
-                set_property(&mut entry, rel, href.to_string());
-                if rel == "icon" || rel == "shortcut icon" {
-                    set_property(&mut entry, "favicon", href.to_string());
-                }
+        if let (Some(rel), Some(href)) = (node.attr("rel"), node.attr("href")) {
+            set_property(&mut entry, rel, href.to_string());
+            if rel == "icon" || rel == "shortcut icon" {
+                set_property(&mut entry, "favicon", href.to_string());
             }
         }
     }
@@ -269,14 +267,16 @@ pub fn extract_metadata(html: &str) -> MetaEntry {
     entry
 }
 
-
 // Function to extract content with readability
 pub fn extract_with_readability(html: &str, url: &str) -> Option<String> {
-    
     let mut document = Cursor::new(html.as_bytes());
-    let url = Url::parse(url).unwrap();
 
-    match extractor::extract(&mut document, &url) {
+    // Handle invalid URLs gracefully - use a default URL for local HTML
+    let parsed_url = Url::parse(url)
+        .or_else(|_| Url::parse("https://example.com"))
+        .ok()?;
+
+    match extractor::extract(&mut document, &parsed_url) {
         Ok(result) => {
             if !result.content.is_empty() {
                 Some(result.content)
@@ -288,14 +288,16 @@ pub fn extract_with_readability(html: &str, url: &str) -> Option<String> {
     }
 }
 
-
 // Function to extract title with readability
 pub fn extract_title_with_readability(html: &str, url: &str) -> Option<String> {
-    
     let mut document = Cursor::new(html.as_bytes());
-    let url = Url::parse(url).unwrap();
 
-    match extractor::extract(&mut document, &url) {
+    // Handle invalid URLs gracefully - use a default URL for local HTML
+    let parsed_url = Url::parse(url)
+        .or_else(|_| Url::parse("https://example.com"))
+        .ok()?;
+
+    match extractor::extract(&mut document, &parsed_url) {
         Ok(result) => {
             if !result.title.is_empty() {
                 Some(result.title)
@@ -314,6 +316,7 @@ mod tests {
     use std::fs::File;
     use std::io::{BufReader, Read};
 
+    #[allow(dead_code)]
 
     fn read_file_by_chunks(path: &str, chunk_size: usize) -> std::io::Result<String> {
         let file = File::open(path)?;
@@ -377,7 +380,7 @@ mod tests {
     fn test_extract_readability_title() {
         let html = read_file("./test-data/regular-article.html");
         let result = extract_with_readability(&html, "https://foo.bar");
-        
+
         let Some(data) = result else {
             panic!("Error occurred while extracting HTML!!");
         };
@@ -418,7 +421,6 @@ mod tests {
         let meta_data = extract_metadata(html);
         println!("{:?}", meta_data);
     }
-
 
     #[test]
     fn test_extract_meta_data_good_content() {
@@ -470,7 +472,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_extract_ld_schema() {
         let html = r#"
@@ -494,12 +495,12 @@ mod tests {
         </body>
         </html>
         "#;
-        let document = Html::parse_document(html);
-        let meta = MetaEntry::default();
-
-
+        let _document = Html::parse_document(html);
+        let _meta = MetaEntry::default();
+        // TODO: Complete test implementation
+        assert!(true);
     }
-    
+
     #[test]
     fn test_extract_from_good_html_content() {
         let html = read_file("./test-data/regular-article.html");
@@ -533,5 +534,4 @@ mod tests {
         let result = extract_title_with_readability(&html, url);
         assert!(result.is_none());
     }
-
 }

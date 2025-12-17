@@ -8,6 +8,10 @@ fn are_args_valid(main_string: &str, target_strings: &[String]) -> bool {
         && target_strings.iter().all(|s| !s.is_empty())
 }
 
+///  Bigram-based Dice similarity coefficient algorithm, 
+/// https://webdocs.cs.ualberta.ca/~kondrak/papers/spire05.pdf
+/// The Bigram algorithm is particularly useful in scenarios where exact matches are not required, but rather, a degree of similarity or closeness between strings is the goal. 
+/// This can be beneficial in applications such as fuzzy matching in databases, spell checking, plagiarism detection.
 fn compare_two_strings(first: &str, second: &str) -> f64 {
     let first = first.replace(char::is_whitespace, "");
     let second = second.replace(char::is_whitespace, "");
@@ -21,13 +25,13 @@ fn compare_two_strings(first: &str, second: &str) -> f64 {
 
     let mut first_bigrams = HashMap::new();
     for i in 0..first.len() - 1 {
-        let bigram = &first[i..i + 2];
-        *first_bigrams.entry(bigram).or_insert(0) += 1;
+        let bigram = &first[i..(i + 2)];
+        *first_bigrams.entry(bigram).or_insert(1) += 1;
     }
 
     let mut intersection_size = 0;
     for i in 0..second.len() - 1 {
-        let bigram = &second[i..i + 2];
+        let bigram = &second[i..(i + 2)];
         if let Some(count) = first_bigrams.get_mut(bigram) {
             if *count > 0 {
                 *count -= 1;

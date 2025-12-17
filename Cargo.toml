@@ -1,25 +1,26 @@
 [package]
 name = "scrapyy"
-edition = "2021"
+edition = "2024"
 description = "HTML parsing and querying with CSS selectors"
 keywords = ["html", "css", "selector", "scraping"]
 authors = ["Sandip Dey <sandip.dey1988@yahoo.com>"]
 
 [dependencies]
-regex = "1.11.1"
-serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0.133"
-scraper = "0.21.0"
-tokio = { version = "1", features = ["full"] }
-lazy_static = { version = "1.5.0" }
-reqwest = { version = "0.12.9", features = ["json"] }
-ammonia = "4.0.0"
+regex = "1.12.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+scraper = "0.25.0"
+tokio = { version = "1.48.0", features = ["full"] }
+lazy_static = "1.5.0"
+reqwest = { version = "0.12.26", features = ["json"] }
+ammonia = "4.1.2"
 readability = "0.3.0"
-html2text = "0.13.3"
-url = "2.5.3"
-tempfile = "3.10.1"
+url = "2.5.7"
+tempfile = "3.23.0"
 paste = "1.0.15"
-html5ever = "0.27.0"
-markup5ever_rcdom = "0.3.0"
+html2text = "0.16.5"
+markup5ever_rcdom = "0.3"
+# markup5ever = "0.16.0"
+html5ever = "0.36.1"
 encoding_rs = "0.8.35"
-thiserror = "2.0.3"
+thiserror = "2.0.17"

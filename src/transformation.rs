@@ -112,9 +112,7 @@ mod tests {
         }
 
         let tfms = vec![Transformation {
-            patterns: vec![
-                Regex::new(r"http(s?)://([\w]+\.)?def\.tld/.*").unwrap(),
-            ],
+            patterns: vec![Regex::new(r"http(s?)://([\w]+\.)?def\.tld/.*").unwrap()],
             pre: Some(pre),
             post: Some(post),
         }];
@@ -151,7 +149,7 @@ mod tests {
     #[test]
     fn run_exec_pre_parser() {
         let re = Regex::new(r"http(s?)://xyz\.com/.*").unwrap();
-        fn pre(doc: &Html) -> Html {
+        fn pre(_doc: &Html) -> Html {
             todo!()
         }
 
@@ -188,6 +186,5 @@ mod tests {
             assert!(result.contains("<i>user</i>"));
             assert!(!result.contains("<b>user</b>"));
         }
-
     }
 }

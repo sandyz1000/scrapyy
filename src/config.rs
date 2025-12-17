@@ -60,11 +60,13 @@ impl Default for SanitizeHtmlOptions {
 
 
 #[derive(Clone)]
+#[allow(dead_code)]
 struct Config {
     sanitize_html_options: SanitizeHtmlOptions,
 }
 
 impl Config {
+    #[allow(dead_code)]
     fn new() -> Self {
         Self {
             sanitize_html_options: SanitizeHtmlOptions::default(),
