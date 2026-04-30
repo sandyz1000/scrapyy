@@ -1,6 +1,7 @@
 use ammonia::Builder;
 use regex::Regex;
 use scraper::{Html, Selector};
+use std::collections::{HashMap, HashSet};
 
 // Function to purify HTML
 // TODO: Write test case for this function
@@ -61,14 +62,26 @@ pub fn get_charset(html: &str) -> String {
 }
 
 /// Function to cleanify HTML
-/// TODO: Verify and fix
 pub fn cleanify(input_html: &str) -> String {
+    use crate::config::SanitizeHtmlOptions;
+    let opts = SanitizeHtmlOptions::default();
+
     let document = Html::parse_document(input_html);
     let html_selector = Selector::parse("html").unwrap();
-
     let html = document.select(&html_selector).next().unwrap().inner_html();
 
-    let sanitized = Builder::new().clean(&html).to_string();
+    let allowed_tags: HashSet<&str> = opts.allowed_tags.iter().map(|s| s.as_str()).collect();
+    let tag_attrs: HashMap<&str, HashSet<&str>> = opts
+        .allowed_attributes
+        .iter()
+        .map(|(tag, attrs)| (tag.as_str(), attrs.iter().map(|a| a.as_str()).collect()))
+        .collect();
+
+    let sanitized = Builder::new()
+        .tags(allowed_tags)
+        .tag_attributes(tag_attrs)
+        .clean(&html)
+        .to_string();
     let cleaned = strip_multi_linebreaks(&sanitized);
     strip_multispaces(&cleaned)
 }

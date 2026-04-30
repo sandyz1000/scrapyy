@@ -4,9 +4,11 @@ use std::borrow::BorrowMut;
 use crate::similarity::find_best_match;
 use scraper::{Html, Selector};
 
-/// Check if a URL is valid
+/// Check if a URL is valid (http/https only)
 pub fn is_valid_url(url: &str) -> bool {
-    url::Url::parse(url).is_ok()
+    url::Url::parse(url)
+        .map(|u| matches!(u.scheme(), "http" | "https"))
+        .unwrap_or(false)
 }
 
 /// Choose the best URL based on title similarity
@@ -18,10 +20,10 @@ pub fn choose_best_url(candidates: Vec<String>, title: &str) -> Option<String> {
     }
 }
 
-// Purify a URL by removing tracking parameters
+// Purify a URL by removing tracking parameters and fragment
 pub fn purify(url: &str) -> Option<String> {
     if let Ok(mut parsed_url) = url::Url::parse(url) {
-        let blacklist_keys = vec![
+        let blacklist_keys: std::collections::HashSet<&str> = [
             "CNDID",
             "__twitter_impression",
             "_hsenc",
@@ -79,11 +81,32 @@ pub fn purify(url: &str) -> Option<String> {
             "pk_source",
             "pk_medium",
             "pk_campaign",
-        ];
+        ]
+        .iter()
+        .copied()
+        .collect();
 
-        for key in blacklist_keys {
-            parsed_url.query_pairs_mut().clear().append_pair(&key, "");
+        // Remove fragment
+        parsed_url.set_fragment(None);
+
+        // Collect query pairs that are not blacklisted
+        let kept: Vec<(String, String)> = parsed_url
+            .query_pairs()
+            .filter(|(k, _)| !blacklist_keys.contains(k.as_ref()))
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+
+        // Rebuild query string
+        if kept.is_empty() {
+            parsed_url.set_query(None);
+        } else {
+            let mut pairs = parsed_url.query_pairs_mut();
+            pairs.clear();
+            for (k, v) in kept {
+                pairs.append_pair(&k, &v);
+            }
         }
+
         return Some(parsed_url.to_string());
     }
     None
@@ -123,10 +146,8 @@ mod tests {
         contents
     }
 
-    // Function to normalize URLs in HTML content
     fn normalize_urls(html: &str, base_url: &str) -> String {
-        // Implement normalization logic here
-        html.to_string()
+        crate::normalizer::normalize(html, base_url).unwrap_or_else(|_| html.to_string())
     }
 
     #[test]
@@ -176,7 +197,7 @@ mod tests {
         ];
 
         for (url, expected) in entries {
-            assert_eq!(purify(url).unwrap(), expected.unwrap(), "URL: {}", url);
+            assert_eq!(purify(url), expected.map(|s| s.to_string()), "URL: {}", url);
         }
     }
 

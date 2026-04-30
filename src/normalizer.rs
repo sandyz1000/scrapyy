@@ -46,23 +46,31 @@ pub fn normalize(html: &str, base_url: &str) -> AppResult<String> {
     // Process all <img> tags
     let img_selector = Selector::parse("img").unwrap();
     for element in document.select(&img_selector) {
-        // Check for data-src first (lazy loading), then src
-        let src = element.value().attr("data-src")
-            .or_else(|| element.value().attr("src"));
-            
-        if let Some(src_value) = src {
-            let absolute_src = absolutify(base_url, src_value);
-            
-            let original_tag = element.html();
-            let modified_tag = original_tag.replace(
-                &format!("src=\"{}\"", src_value),
-                &format!("src=\"{}\"", absolute_src)
-            ).replace(
-                &format!("data-src=\"{}\"", src_value),
-                &format!("data-src=\"{}\"", absolute_src)
+        let original_tag = element.html();
+
+        if let Some(data_src) = element.value().attr("data-src") {
+            // Lazy-loaded image: promote data-src → src and remove data-src
+            let absolute_src = absolutify(base_url, data_src);
+            let modified = if let Some(src) = element.value().attr("src") {
+                original_tag.replace(
+                    &format!("src=\"{}\"", src),
+                    &format!("src=\"{}\"", absolute_src),
+                )
+            } else {
+                original_tag.replacen("<img ", &format!("<img src=\"{}\" ", absolute_src), 1)
+            };
+            let modified = modified
+                .replace(&format!(" data-src=\"{}\"", data_src), "")
+                .replace(&format!("data-src=\"{}\"", data_src), "");
+            result = result.replace(&original_tag, &modified);
+        } else if let Some(src) = element.value().attr("src") {
+            // Regular image: absolutify src
+            let absolute_src = absolutify(base_url, src);
+            let modified = original_tag.replace(
+                &format!("src=\"{}\"", src),
+                &format!("src=\"{}\"", absolute_src),
             );
-            
-            result = result.replace(&original_tag, &modified_tag);
+            result = result.replace(&original_tag, &modified);
         }
     }
     

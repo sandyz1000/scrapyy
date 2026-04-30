@@ -55,6 +55,7 @@ pub struct MetaEntry {
     pub source: String,
     pub published: String,
     pub favicon: String,
+    #[serde(rename = "type")]
     pub meta_type: String,
 }
 
@@ -269,6 +270,10 @@ pub fn extract_metadata(html: &str) -> MetaEntry {
 
 // Function to extract content with readability
 pub fn extract_with_readability(html: &str, url: &str) -> Option<String> {
+    if html.trim().is_empty() {
+        return None;
+    }
+
     let mut document = Cursor::new(html.as_bytes());
 
     // Handle invalid URLs gracefully - use a default URL for local HTML
@@ -278,11 +283,15 @@ pub fn extract_with_readability(html: &str, url: &str) -> Option<String> {
 
     match extractor::extract(&mut document, &parsed_url) {
         Ok(result) => {
-            if !result.content.is_empty() {
-                Some(result.content)
-            } else {
-                None
+            if result.content.is_empty() {
+                return None;
             }
+            // Strip tags to check for meaningful text content
+            let text = html2text::from_read(result.content.as_bytes(), 80).ok()?;
+            if text.trim().len() < 10 {
+                return None;
+            }
+            Some(result.content)
         }
         Err(_) => None,
     }

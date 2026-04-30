@@ -6,10 +6,9 @@ use crate::similarity::find_best_match;
 use crate::{
     extract::*,
     html::{cleanify, purify},
-    linker::{absolutify, is_valid_url, purify as purify_url},
+    linker::{absolutify, get_domain, is_valid_url, purify as purify_url},
     transformation::{exec_post_parser, exec_pre_parser},
     utils::get_time_to_read,
-    // normalize::normalize
 };
 use reqwest::Client;
 
@@ -94,9 +93,9 @@ pub async fn parse_from_html(
     input_url: &str,
     parsed_options: &ParseOptions,
 ) -> Result<ParsedContent> {
+    // Extract metadata from original HTML before purification — ammonia strips head/meta/link tags
+    let meta = extract_metadata(input_html);
     let pure_html = purify(input_html);
-    // TODO: Fix the extract_metadata completely
-    let meta = extract_metadata(&pure_html);
 
     let MetaEntry {
         url,
@@ -143,12 +142,21 @@ pub async fn parse_from_html(
 
     let best_url = choose_best_url(&links, &title)?;
 
+    // Derive source from URL hostname when not provided in metadata
+    let source = if source.is_empty() {
+        get_domain(&best_url).unwrap_or_default()
+    } else {
+        source
+    };
+
     // Start the sequence of operation to extract the content
     let input_html = normalize(&input_html, &best_url)?;
     
     let content = exec_pre_parser(&input_html, &links);
     let content = extract_with_readability(&content, &best_url)
         .ok_or(Error::NullError(format!("Content")))?;
+    // Re-normalize after readability to restore target="_blank" on links (readability strips it)
+    let content = normalize(&content, &best_url).unwrap_or(content);
     let content = exec_post_parser(&content, &links)
         .map(|c| cleanify(&c))
         .unwrap_or_else(|| cleanify(&content));
@@ -258,8 +266,8 @@ mod tests {
                 },
                 expectation: Some(|result| {
                     let content = result.content;
-                    assert!(content.contains(r#"<img src="https://somewhere.any/image1.jpg" />"#));
-                    assert!(content.contains(r#"<img src="https://somewhere.any/image2.jpg" />"#));
+                    assert!(content.contains(r#"<img src="https://somewhere.any/image1.jpg""#));
+                    assert!(content.contains(r#"<img src="https://somewhere.any/image2.jpg""#));
                 }),
             },
             TestCase {
@@ -279,9 +287,9 @@ mod tests {
 
                     assert_eq!(result.description, exp_desc);
                     let content = result.content;
-                    assert!(content.contains(r#"<a target="_blank" href="https://otherwhere.com/descriptions/rational-peach">"#));
+                    assert!(content.contains(r#"href="https://otherwhere.com/descriptions/rational-peach" target="_blank""#));
                     assert!(content.contains(
-                        r#"<a target="_blank" href="https://somewhere.com/dict/watermelon">"#
+                        r#"href="https://somewhere.com/dict/watermelon" target="_blank""#
                     ));
                 }),
             },
@@ -292,12 +300,14 @@ mod tests {
             let html = &acase.input.html;
             let url = acase.input.url.as_deref().unwrap_or("");
             let parsed_options = ParseOptions::default();
-            let result = parse_from_html(html, url, &parsed_options).await.unwrap();
+            let result = parse_from_html(html, url, &parsed_options).await;
             match acase.expectation {
                 Some(expectation) => {
-                    expectation(result);
+                    expectation(result.expect(&format!("Expected Ok for case: {}", desc)));
                 }
-                _ => (),
+                None => {
+                    assert!(result.is_err(), "Expected Err for case: {}", desc);
+                }
             }
         }
 

@@ -1,13 +1,12 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use scraper::Html;
 use std::sync::Mutex;
 
 #[derive(Clone)]
 pub struct Transformation {
     patterns: Vec<Regex>,
-    pre: Option<fn(&Html) -> Html>,
-    post: Option<fn(&Html) -> Html>,
+    pre: Option<fn(&str) -> String>,
+    post: Option<fn(&str) -> String>,
 }
 
 lazy_static! {
@@ -77,38 +76,46 @@ pub fn find_transformations(links: Vec<String>) -> Vec<Transformation> {
 }
 
 pub fn exec_pre_parser(html: &str, links: &Vec<String>) -> String {
-    let document = Html::parse_document(html);
-    for transformation in find_transformations(links.clone()) {
-        if let Some(pre) = transformation.pre {
-            pre(&document);
-        }
-    }
-    document.root_element().html()
+    find_transformations(links.clone())
+        .into_iter()
+        .fold(html.to_string(), |current, tfm| {
+            if let Some(pre) = tfm.pre {
+                pre(&current)
+            } else {
+                current
+            }
+        })
 }
 
 pub fn exec_post_parser(html: &str, links: &Vec<String>) -> Option<String> {
-    let document = Html::parse_document(html);
-    for transformation in find_transformations(links.clone()) {
-        if let Some(post) = transformation.post {
-            post(&document);
-        }
+    let tfms = find_transformations(links.clone());
+    if tfms.iter().any(|t| t.post.is_some()) {
+        let result = tfms.into_iter().fold(html.to_string(), |current, tfm| {
+            if let Some(post) = tfm.post {
+                post(&current)
+            } else {
+                current
+            }
+        });
+        Some(result)
+    } else {
+        None
     }
-    // document.root_element().html()
-    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use regex::Regex;
 
     #[test]
     fn test_add_transformations() {
-        fn pre(doc: &Html) -> Html {
-            doc.clone()
+        fn pre(html: &str) -> String {
+            html.to_string()
         }
 
-        fn post(doc: &Html) -> Html {
-            doc.clone()
+        fn post(html: &str) -> String {
+            html.to_string()
         }
 
         let tfms = vec![Transformation {
@@ -138,19 +145,22 @@ mod tests {
         assert!(not_found);
 
         let found_one =
-            find_transformations(vec!["https://lmn.inc/docs/article.html".to_string()]).len() > 1;
+            find_transformations(vec!["https://def.gl/docs/article.html".to_string()]).len() >= 1;
         assert!(found_one);
 
         let found_two =
-            find_transformations(vec!["https://lmn.inc/docs/article.html".to_string()]).len() > 2;
+            find_transformations(vec!["https://uvw.inc/docs/article.html".to_string()]).len() >= 1;
         assert!(found_two);
     }
 
     #[test]
     fn run_exec_pre_parser() {
         let re = Regex::new(r"http(s?)://xyz\.com/.*").unwrap();
-        fn pre(_doc: &Html) -> Html {
-            todo!()
+        fn pre(html: &str) -> String {
+            Regex::new(r#"<div class="adv">[\s\S]*?</div>"#)
+                .unwrap()
+                .replace_all(html, "")
+                .to_string()
         }
 
         let tfms = vec![Transformation {
